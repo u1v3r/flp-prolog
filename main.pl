@@ -5,6 +5,9 @@
 :- dynamic dogsPosition/3.
 
 
+%dlzka cakania na odpoved v sekundach
+timeout(1000).
+
   %INICIALIZACE A MAZANI
 %----------------------------------------------
 initGround :- assert(isFree(2)), assert(isFree(3)),
@@ -144,15 +147,31 @@ moveDogs(I,V) :-
   ). 
 %-------------------------------------------
  
+convertInput(InputChar,ConvertedChar) :-
+	atom_codes(InputChar,[Code|_]),
+	(          
+          Code == 65 -> ConvertedChar = '10' %je to A
+          ;
+          Code == 66 -> ConvertedChar = '11' %je to B
+          ;
+          ConvertedChar = InputChar
+        ).
+ 
 %kontrola o jakou zpravu se jedna                 
-isHare(Name,Body,ID) :- Name = 'HARE', 
-          sub_string(Body,0,_,0,Nmbr), atom_number(Nmbr,ID).
+isHare(Name,Body,Field) :- Name = 'HARE', 
+          sub_string(Body,0,_,0,Nmbr),
+          convertInput(Nmbr,CNmbr),
+          atom_number(CNmbr,Field).
+                  
+          
 isDog(Name,Body,ID,Field) :- Name = 'DOG', 
           sub_string(Body,0,1,_,Idx), atom_number(Idx,ID),
-          sub_string(Body,2,_,0,Nmbr), atom_number(Nmbr,Field).
+          sub_string(Body,2,_,0,Nmbr), 
+          convertInput(Nmbr,CNmbr),
+          atom_number(CNmbr,Field).
 isPositions(Name) :- Name = 'POS'.
-isQuit(Name) :- 
-	Name = 'QUIT'.
+isQuit(Name) :- Name = 'QUIT'.
+
 
 %vraci prvni prvek ze seznamu
 getFirst(X,[X]) :- !.
@@ -174,7 +193,6 @@ read_line(Line) :-
 		read_line(LL), atom_codes(Char,[Cd]),
 		[Cd|LL] = Line).
 
-  
 %HLAVNI FUNKCE
 
 % sluzi len na testovanie prikazov
@@ -188,7 +206,6 @@ test :-
 	getFirst(Name,List),              %do Name se ulozi prvni prvek pole	
     	getLast(Body,List),               %do Body se ulozi druhy a zaroven posledni prvek
 	(
-
 		isDog(Name,Body,ID,Field) -> write(Name),nl,write(ID),nl,write(Field),moveDogs(ID,Field)
 			;
 			(
@@ -222,35 +239,71 @@ writePositions :-
 	write(Z),
 	nl.
  
+
+isWinner :- 
+	isHareWin -> write('Hare WIN'),nl,write('Starting new game'),nl,start;
+    	isDogsWin -> write('Dogs WIN'),nl,write('Starting new game'),nl,start.
+
+
 % inicializuje hracie pole a spusti hru 
 start :- 
     clearAll,
     initAll,
-    play.
+    %zistenie kdo za koho hra
+    read_line(Line),		         
+    skipLastItem(Line,Edited),	      
+    atom_codes(StringMessage,Edited), 	
+    make_term(StringMessage,List),    
+    getFirst(Name,List), 
+    getLast(Body,List),
+    (
+    Name = 'START' -> write('HARE:8;'),nl,write('Zadajte pozici psa'),nl,play(1)% 1 znamena ze AI hraje za zajaca
+    ;
+	    (
+	    isHare(Name,Body,_) -> update_dog_position,write('Zadajte pozici zajice'),nl,play(-1) % -1 AI hraje za psov
+	    ;
+	    fail
+	    )
+    ).    
  
 % hra
-play :-    
-    isHareWin -> write('Hare WIN'),nl,fail;
-    isDogsWin -> write('Dogs WIN'),nl,fail;
-    read_line(Line),		      %precita riadok a v vrati text ako kody znakov
-    skipLastItem(Line,Edited),	      %odstrani ; zo vstupu
-    atom_codes(StringMessage,Edited), %prevedie spat na text, aby fungovala make_term	
-    make_term(StringMessage,List),    %rozdelime zpravu do pole (napr zpravu 'HARE:3', rozdelime do pole ['HARE', '3']
-    getFirst(Name,List),              %do Name se ulozi prvni prvek pole 
+play(HareOrDogs) :-    
+    get_time(TimeStart),
+    read_line(Line),		      %precita riadok a v vrati text ako kody znakov       
+    skipLastItem(Line,Edited),	      %odstrani ; zo vstupu    
+    atom_codes(StringMessage,Edited), %prevedie spat na text, aby fungovala make_term    	
+    make_term(StringMessage,List),    %rozdelime zpravu do pole (napr zpravu 'HARE:3', rozdelime do pole ['HARE', '3']    
+    getFirst(Name,List),              %do Name se ulozi prvni prvek pole    
     getLast(Body,List),               %do Body se ulozi druhy a zaroven posledni prvek
-    (isQuit(Name) -> !, fail	      %pokud je zprava 'QUIT' dochazi k ukonceni aplikace
-                       		      %jinak se kontroluje zda jde o zpravu pro psy nebo kralika
-	        ;       ( isDog(Name,Body,ID,Field) ->  moveDogs(ID,Field)
-	                ;              (isHare(Name,Body,Field) ->  moveHare(Field)                      
-	                                )
-	                                	;
-						(
-						isPositions(Name) -> writePositions						
-						)
-	                )
-	        
+    (isQuit(Name) -> !,fail	      %pokud je zprava 'QUIT' dochazi k ukonceni aplikace
+	    ;
+	    (                		      %jinak se kontroluje zda jde o zpravu pro psy nebo kralika
+		    %je to pes a je to validny tah
+		    isDog(Name,Body,ID,Field),HareOrDogs = 1 ->  moveDogs(ID,Field),update_hare_position
+		    ;
+		    (
+			    %je to zajac a je to validny tah              
+			    isHare(Name,Body,Field),HareOrDogs = -1 ->  moveHare(Field),update_dog_position
+			    ;
+			    (
+				    isPositions(Name) -> writePositions
+				    ;
+				    (
+				    write('invalid move'),nl,(HareOrDogs = 1,write('dogs win'),nl;write('hare win'),nl)
+				    )
+			    )
+		    )
+	    )	   
     ),    
-    play.
+    get_time(TimeEnd),
+    (
+	    ResultTime is TimeEnd - TimeStart,
+	    timeout(Timeout),
+	    ResultTime > Timeout -> write('waiting time exceeded'),nl,start% TODO: treba vypisat vitaza
+	    ;	      
+	    play(HareOrDogs)	    
+	    
+    ).
 
 
   
@@ -279,10 +332,130 @@ skipLastItem([H|T],[H|S]) :-
    
    
 %ZAJIMAVY FCE....
-    %between(1, 2, Count), 
+%between(1, 2, Count). 
 
 
 %vstup aplikacie
 prolog :-
 	prompt(_, ''),
-	start.   
+	start.
+  
+%///////////////////////////
+:- dynamic bestField/2.
+bestField(0,0).
+
+findBestField(ID) :- connect(8,Y),
+                    isFree(Y),
+                    bestField(ID,FVal),
+                    value(Y,Val),
+                    Val > FVal, 
+                    retract(bestField(ID,FVal)),
+                    assert(bestField(Y,Val)),                              
+                    fail.
+findBestField(ID) :- bestField(ID,_).   
+
+% ohodnocovacia funkcia
+evalPos(1,40).%prva pozicia je pre zajaca vitaztvo a pre psov je nepodstatna
+evalPos(2,40).
+evalPos(3,40).
+evalPos(4,99).
+evalPos(5,90).
+evalPos(6,99).%najviac moznosti pohybu
+evalPos(7,80).
+evalPos(8,50).
+evalPos(9,60).
+evalPos(10,50).
+evalPos(11,40).
+
+
+% zoznam platnych pohybov pre zajaca a psov
+% pohyby pre zajaca
+move(Pos,NextPos,1) :-
+	connect(Pos,NextPos),
+	isFree(NextPos).
+	
+% pohyby pre psa
+move(Pos,NextPos,-1) :-
+	connectD(Pos,NextPos),
+	isFree(NextPos).
+move(Move, Pos, Pos1,1) :-
+	connect(Pos,Move),
+	connect(Move,Pos1),
+	isFree(Pos1).
+	
+move(Move, Pos, Pos1,-1) :-
+	connectD(Pos,Move),
+	connectD(Move,Pos1),
+	isFree(Pos1).
+
+		
+
+% v zozname pozici najde s navyssim ohodnotenim, ak nenajde 
+% ziadnu volnu poziciu, tak vrati Val = -1
+findBest([Pos],Pos,Val) :- 	
+	(
+	isFree(Pos) -> evalPos(Pos,Val) 
+	;
+	Val = -1
+	),!.
+findBest([Pos|Positions],BestPos,Val) :-
+	findBest(Positions,EvBestPos,ValO),	
+	(
+	isFree(Pos) -> evalPos(Pos,ValI)
+	;
+	ValI = -1
+	),
+	(
+	ValO < ValI -> BestPos = Pos,Val = ValI
+	;
+	ValO >= ValI -> BestPos = EvBestPos,Val = ValO
+	).
+
+%todo: treba poriesit sposob pohybu psov
+update_dog_position :-	
+	dogsPosition(X,Y,Z),
+	minimax(2,X,1,-1,Dog1Value,Dog1Move),
+	minimax(2,Y,1,-1,Dog2Value,Dog2Move),
+	minimax(2,Z,1,-1,Dog3Value,Dog3Move),
+	moveDogs(1,Dog1Move).
+	
+
+update_hare_position :-	
+	harePosition(Pos),	
+	minimax(4,Pos,1,1,_,Move),	
+	moveHare(Move).
+
+
+/*
+vypocita pomocou minimax najvyhodnejsiu poziciu
+minimax(+Depth, +Position, +Player, +HareOrDogs, -BestValue, -BestMove)
+
+	Depth - hlbky vytvaraneho stromu
+	Position - aktualna pozicia
+	Player - striedanie max/min (hrac/oponent) 1 ak je hrac -1 oponent
+	HareOrDogs - urcuje ci ide o psa(-1) alebo zajaca(1)
+	Value - hodnota pozicie
+	Move - najvyhodnejsia pozicia
+*/    
+minimax(0, Position, Player, _ , Value, _) :- % ohodnoti koncovy list stromu 
+      evalPos(Position, Evaluated),
+      Value is Evaluated * Player.
+minimax(Depth, Position, Player, HareOrDogs , Value, Move) :-
+      Depth > 0, 
+      D1 is Depth - 1,
+      bagof(NextPos, move(Position, NextPos, HareOrDogs), Moves), % zoznam platnych pohybov, zohladnuje aj obsadene pozicie
+      minimax(Moves, Position, D1, Player, HareOrDogs, -100, nil, Value, Move),!.
+      
+% vypocet by mal zohladnovat aj ci ide o zajaca alebo psa
+minimax([], _, _,_,_, Value,Best,Value,Best).
+minimax([Move|Moves],Position,Depth,Player, HareOrDogs, Value0,Move0,BestValue,BestMove):-
+      move(Move, Position, Position1, HareOrDogs),       
+      Opponent is -Player,
+      Animal is HareOrDogs,
+      minimax(Depth, Position1, Opponent, HareOrDogs, OpponentValue, _), 
+      Value is -OpponentValue,
+      ( 
+      Value > Value0 -> minimax(Moves,Position,Depth,Player, HareOrDogs, Value ,Move ,BestValue,BestMove)
+      ;
+      minimax(Moves,Position,Depth,Player,HareOrDogs,Value0,Move0,BestValue,BestMove)
+      ). 
