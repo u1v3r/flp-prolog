@@ -141,19 +141,18 @@ moveHare(V) :-
   
   
 moveDogs(I,V) :-
-                  %ziskani aktualni pozice psu
+                  			%ziskani aktualni pozice psu
   (I = 1 ->  dogsPosition(U,X,Y) 
       ;       ( I = 2 -> dogsPosition(X,U,Y)
               ;              (I = 3 -> dogsPosition(X,Y,U)                               
                               )
               )
   ),
-  connectD(U,V),    %kontrola zda je cesta mezi dvema uzly
-  isFree(V),        %kontorola jestli uzel neni obsazenej
+  connectD(U,V),    			%kontrola zda je cesta mezi dvema uzly
+  isFree(V),        			%kontorola jestli uzel neni obsazenej
   !,
-  assert(isFree(U)),      %pridani noveho a odebrani stareho uzlu z databaze
-  retract(isFree(V)),
-                    %uprava aktualnich pozic psu
+  assert(isFree(U)),      		%pridani noveho a odebrani stareho uzlu z databaze
+  retract(isFree(V)),			%uprava aktualnich pozic psu                    
   (I = 1 ->   assert(dogsPosition(V,X,Y)), retract(dogsPosition(U,X,Y)) 
       ;       ( I = 2 ->  assert(dogsPosition(X,V,Y)), retract(dogsPosition(X,U,Y))
               ;              (I = 3 ->  assert(dogsPosition(X,Y,V)), retract(dogsPosition(X,Y,U))                               
@@ -292,15 +291,19 @@ play(HareOrDogs) :-
 		    	(
 		    		isFree(Field) ->
 		    		(
-				    	moveDogs(ID,Field),		    	 
-		            		(
-		            		(turnCounter(X), staticHareMove(X))
-		            		;
-		           		update_hare_position
-		              		),
-					isFast(TimeStart)
+				    	moveDogs(ID,Field) -> 
+				    	(		    	 
+			            		(
+			            		(turnCounter(X), staticHareMove(X))
+			            		;
+			           		update_hare_position
+			              		),
+						isFast(TimeStart)
+						;
+						write('You win'),nl,halt
+					)
 					;
-					write('You win'),nl,halt
+					write('invalid move'),nl,write('AI win'),nl,halt
 				)
 				;
 				write('invalid move'),nl,write('AI win'),nl,halt
@@ -312,15 +315,19 @@ play(HareOrDogs) :-
 			    	(
 			    		isFree(Field) ->
 					    	(
-						    	moveHare(Field),
-					 		(
-			                		(turnCounter(X),staticDogsMove(X)) 
-			                		;
-			                		update_dog_position
-			                		),	            
-						    	isFast(TimeStart)
+						    	moveHare(Field) ->
+						    	(
+						 		(
+				                		(turnCounter(X),staticDogsMove(X)) 
+				                		;
+				                		update_dog_position
+				                		),	            
+							    	isFast(TimeStart)
+							    	;
+							    	write('You win'),nl,halt
+						    	)
 						    	;
-						    	write('You win'),nl,halt
+						    	write('invalid move'),nl,write('AI win'),nl,halt
 					    	)
 					;
 					write('invalid move'),nl,write('AI win'),nl,halt
@@ -376,10 +383,6 @@ skipLastItem([_],[ ]) :- !.
 skipLastItem([H|T],[H|S]) :-
     skipLastItem(T,S).  
    
-   
-%ZAJIMAVY FCE....
-%between(1, 2, Count). 
-
 
 %vstup aplikacie
 prolog :-
