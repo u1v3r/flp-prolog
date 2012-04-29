@@ -284,43 +284,53 @@ play(HareOrDogs) :-
     make_term(StringMessage,List),    %rozdelime zpravu do pole (napr zpravu 'HARE:3', rozdelime do pole ['HARE', '3']    
     getFirst(Name,List),              %do Name se ulozi prvni prvek pole    
     getLast(Body,List),               %do Body se ulozi druhy a zaroven posledni prvek
-    (isQuit(Name) -> !,fail	      %pokud je zprava 'QUIT' dochazi k ukonceni aplikace
+    (isQuit(Name) -> halt	      %pokud je zprava 'QUIT' dochazi k ukonceni aplikace
 	    ;
 	    (                		      %jinak se kontroluje zda jde o zpravu pro psy nebo kralika
 		    %je to pes a je to validny tah
 		    isDog(Name,Body,ID,Field),HareOrDogs = 1 ->
 		    	(
-			    	moveDogs(ID,Field),		    	 
-	            		(
-	            		(turnCounter(X), staticHareMove(X))
-	            		;
-	           		update_hare_position
-	              		),
-				isFast(TimeStart)
+		    		isFree(Field) ->
+		    		(
+				    	moveDogs(ID,Field),		    	 
+		            		(
+		            		(turnCounter(X), staticHareMove(X))
+		            		;
+		           		update_hare_position
+		              		),
+					isFast(TimeStart)
+					;
+					write('You win'),nl,halt
+				)
 				;
-				write('You win1'),nl,halt
+				write('invalid move'),nl,write('AI win'),nl,halt
 			)
 		    ;
 		    (
 			    %je to zajac a je to validny tah              
 			    isHare(Name,Body,Field),HareOrDogs = -1 ->  
 			    	(
-				    	moveHare(Field),
-			 		(
-	                		(turnCounter(X),staticDogsMove(X)) 
-	                		;
-	                		update_dog_position
-	                		),	            
-				    	isFast(TimeStart)
-				    	;
-				    	write('You win2'),nl,halt
+			    		isFree(Field) ->
+					    	(
+						    	moveHare(Field),
+					 		(
+			                		(turnCounter(X),staticDogsMove(X)) 
+			                		;
+			                		update_dog_position
+			                		),	            
+						    	isFast(TimeStart)
+						    	;
+						    	write('You win'),nl,halt
+					    	)
+					;
+					write('invalid move'),nl,write('AI win'),nl,halt
 			    	)
 			    ;
 			    (
 				    isPositions(Name) -> writePositions
 				    ;
 				    (
-				    write('invalid move'),nl,(HareOrDogs = 1,write('dogs win'),nl;write('hare win'),nl),halt
+				    write('invalid move'),nl,(HareOrDogs = -1,write('dogs win'),nl;write('hare win'),nl),halt
 				    )
 			    )
 		    )
@@ -455,8 +465,7 @@ chooseDog([_|Dogs],[Value|Values],[_|Moves],RetValue,RetMove,RetDog) :-
 
 %todo: treba poriesit sposob pohybu psov
 update_dog_position :-		
-	dogsPosition(X,Y,Z),	
-%	write('tu je'),
+	dogsPosition(X,Y,Z),
 	minimax(2,X,1,-1,Dog1Value,Dog1Move),
 	minimax(2,Y,1,-1,Dog2Value,Dog2Move),
 	minimax(2,Z,1,-1,Dog3Value,Dog3Move),
@@ -512,12 +521,22 @@ update_dog_position :-
 %	).
 	  
 
+update_hare_position :-
+	harePosition(Pos),
+	connect(Pos,4),
+	isFree(4),	
+	moveHare(4),
+	write('HARE:'),
+	writeMove(4),
+	write(';'),
+	nl,!.
+	
 update_hare_position :-			
 	harePosition(Pos),	
 	minimax(4,Pos,1,1,_,Move),	
 	moveHare(Move),
 	write('HARE:'),
-  	writeMove(Move),
+	writeMove(Move),
 	write(';'),
 	nl.
 	
@@ -547,7 +566,8 @@ minimax(Depth, Position, Player, HareOrDogs , Value, Move) :-
       length(Moves,Size),
       Size > 1 -> minimax(Moves, Position, D1, Player, HareOrDogs, -100, nil, Value, Move),!%vypocet minimax pre zvoleneho hraca
       ;
-      (	      %	ak nenajde ziadnu tak sa skus presunut na minimax poziciu, ktora je volna, inak false	
+      (      
+       %	ak nenajde ziadnu tak sa skus presunut na minimax poziciu, ktora je volna, inak false	
 	      Size = 0 -> evalPos(Position,Value),isFree(Position),Move=Position
 	      ;
 	      (
