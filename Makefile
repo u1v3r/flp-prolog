@@ -1,8 +1,9 @@
 OUTPUT = xdvors08
 SOURCE = main
+CC = swipl
 
 build:
-	swipl -q -o $(OUTPUT) -c $(SOURCE) 
+	$(CC) -q -o $(OUTPUT) -c $(SOURCE) 
 
 clean:
 	rm -f $(OUTPUT)
